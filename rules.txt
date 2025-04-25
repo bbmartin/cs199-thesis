@@ -39,7 +39,7 @@ lambda_kwparams: "**" name ","?
 
 ?stmt: simple_stmt | compound_stmt
 ?simple_stmt: small_stmt (";" small_stmt)* [";"] _NEWLINE
-?small_stmt: (flag_stmt | expr_stmt | assign_stmt | del_stmt | pass_stmt | flow_stmt | import_stmt | global_stmt | nonlocal_stmt | assert_stmt)
+?small_stmt: (expr_stmt | assign_stmt | del_stmt | pass_stmt | flow_stmt | import_stmt | global_stmt | nonlocal_stmt | assert_stmt | flag_stmt)
 expr_stmt: testlist_star_expr
 assign_stmt: annassign | augassign | assign
 
@@ -271,7 +271,7 @@ _NEWLINE: ( /\r?\n[\t ]*/ | COMMENT )+
 !name: NAME | "match" | "case"
 NAME: /[^\W\d]\w*/
 FLAG_MARKER: "#f:"
-flag_stmt: FLAG_MARKER (test | assign_stmt)
+flag_stmt: FLAG_MARKER test _NEWLINE
 COMMENT: /#(?!f:)[^\n]*/
 
 STRING: /([ubf]?r?|r[ubf])("(?!"").*?(?<!\\)(\\\\)*?"|'(?!'').*?(?<!\\)(\\\\)*?')/i

@@ -1,0 +1,13 @@
+Fixpoint for_loop {A : Type}
+	(init : A)
+	(start end : nat)
+	(body : nat -> A -> A)
+	: A :=
+	if start <? end then
+		for_loop (body start init) (start + 1) end body
+	else
+		init
+
+Definition for_loop_operation (n : nat) : nat :=
+	for_loop 0 9 (n + 1) (fun i x => x + i)
+

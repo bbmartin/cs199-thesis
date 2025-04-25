@@ -1,3 +1,6 @@
+import sys
+import os.path
+import math
 from lark import Lark
 from lark.indenter import PythonIndenter
 from lark.visitors import Transformer
@@ -32,8 +35,15 @@ class ForToCOQ():
         
         # Definition:
         self.translation = "Fixpoint for_loop {A : Type}\n\t(init : A)\n\t(start end : nat)\n\t(body : nat -> A -> A)\n\t: A :=\n\tif start <? end then\n\t\tfor_loop (body start init) (start + 1) end body\n\telse\n\t\tinit\n\n"
+        
+        # range()
+        start = int(self.range["parameters"][0]) if len(self.range["parameters"]) > 1 else 0
+        stop = int(self.range["parameters"][1]) if len(self.range["parameters"]) == 2 else int(self.range["parameters"][0])
+        step = int(self.range["parameters"][2]) if len(self.range["parameters"]) == 3 else 1
+        end = start + math.floor((stop - start - 1)/step) * step
+
         # Operation:
-        self.translation = self.translation + f"Definition for_loop_operation (n : nat) : nat :=\n\tfor_loop 0 {str(self.range["parameters"][0]) if len(self.range["parameters"]) > 1 else str(0)} (n + 1) (fun {self.iterable} {self.block[0]["variable"]} => {self.block[0]["value"]["lhe"]} {self.block[0]["value"]["operator"]} {self.block[0]["value"]["rhe"]})\n"
+        self.translation = self.translation + f"Definition for_loop_operation (n : nat) : nat :=\n\tfor_loop 0 {str(end)} (n + 1) (fun {self.iterable} {self.block[0]["variable"]} => {self.block[0]["value"]["lhe"]} {self.block[0]["value"]["operator"]} {self.block[0]["value"]["rhe"]})\n\n"
 
     def __str__(self):
         return self.translation
@@ -50,6 +60,15 @@ class WhileToCOQ():
         return self.translation
 
 class PythonToCOQ(Transformer):
+    visit_tokens = True
+
+    def flag_stmt(self, args):
+        marker, content = args
+        return {
+            "type": "flag",
+            "content": content
+        }
+
     def number(self, args):
         return args[0].value
 
@@ -64,6 +83,9 @@ class PythonToCOQ(Transformer):
 
     def var(self, args):
         return args[0]
+
+    def list_(self, args):
+        return args
 
     def set_(self, args):
         return args
@@ -183,7 +205,18 @@ def _read(fn, *args):
         return f.read()
 
 if __name__ == '__main__':
-    parse_tree = python3_parser.parse(_read("test.py") + "\n")
+    input_filepath = sys.argv[1]
+
+    if not os.path.isfile(input_filepath):
+        exit(f"Error: '{input_filepath}' not found.")
+        
+    output_filepath = sys.argv[2]
+
+    output_file = open(output_filepath, "w")
+    if os.path.isfile(output_filepath):
+        output_file.truncate(0)
+
+    parse_tree = python3_parser.parse(_read(input_filepath) + "\n")
     # print(parse_tree.pretty())
     for block in PythonToCOQ().transform(parse_tree):
-        print(block)
+        output_file.write(block)
