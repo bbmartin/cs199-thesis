@@ -17,7 +17,7 @@ class IfToCOQ():
         self.else_ = transform["else"]
         
         # if:
-        self.translation = f"match {self.condition["lhe"]} with\n| {self.condition["rhe"]} => {self.block[0]["expression"]}"
+        self.translation = f"match {self.condition["lhe"] if isinstance(self.condition["lhe"], str) else self.condition["lhe"]["variable"]} with\n| {self.condition["rhe"]} => {self.block[0]["expression"]}"
         # elif:
         for elif_ in self.elif_: 
             self.translation = self.translation + f"\n| {elif_["condition"]["rhe"]} => {elif_["block"][0]["expression"]}"
@@ -28,7 +28,9 @@ class IfToCOQ():
         return self.translation
 
 class ForToCOQ():
+
     def __init__(self, transform):
+        self.supported_range_functions = ["range"]
         self.iterable = transform["iterable"]
         self.range = transform["range"]
         self.block = transform["block"]
@@ -36,14 +38,25 @@ class ForToCOQ():
         # Definition:
         self.translation = "Fixpoint for_loop {A : Type}\n\t(init : A)\n\t(start end : nat)\n\t(body : nat -> A -> A)\n\t: A :=\n\tif start <? end then\n\t\tfor_loop (body start init) (start + 1) end body\n\telse\n\t\tinit\n\n"
         
-        # range()
-        start = int(self.range["parameters"][0]) if len(self.range["parameters"]) > 1 else 0
-        stop = int(self.range["parameters"][1]) if len(self.range["parameters"]) == 2 else int(self.range["parameters"][0])
-        step = int(self.range["parameters"][2]) if len(self.range["parameters"]) == 3 else 1
-        end = start + math.floor((stop - start - 1)/step) * step
+        if self.range["type"] == "function":
+            match self.range["name"]:
+                case "range":
+                    # range()
+                    start = int(self.range["parameters"][0]) if len(self.range["parameters"]) > 1 else 0
+                    stop = int(self.range["parameters"][1]) if len(self.range["parameters"]) == 2 else int(self.range["parameters"][0])
+                    step = int(self.range["parameters"][2]) if len(self.range["parameters"]) == 3 else 1
+                    end = start + math.floor((stop - start - 1)/step) * step
 
-        # Operation:
-        self.translation = self.translation + f"Definition for_loop_operation (n : nat) : nat :=\n\tfor_loop 0 {str(end)} (n + 1) (fun {self.iterable} {self.block[0]["variable"]} => {self.block[0]["value"]["lhe"]} {self.block[0]["value"]["operator"]} {self.block[0]["value"]["rhe"]})\n\n"
+                    # Operation:
+                    self.translation = self.translation + f"Definition for_loop_operation (n : nat) : nat :=\n\tfor_loop {self.block[0]["value"]["lhe"]["value"]} 0 {str(end + 1)} (fun {self.iterable} {self.block[0]["variable"] if isinstance(self.block[0]["variable"], str) else self.block[0]["variable"]["variable"]} => {self.block[0]["value"]["lhe"] if isinstance(self.block[0]["value"]["lhe"], str) else self.block[0]["value"]["lhe"]["variable"]} {self.block[0]["value"]["operator"]} {self.block[0]["value"]["rhe"] if isinstance(self.block[0]["value"]["rhe"], str) else self.block[0]["value"]["rhe"]["variable"]})\n\n"
+                case _:
+                    sys.exit("ForToCOQ Error: Unsupported function used as range")
+        elif self.range["type"] == "assignment":
+            #TODO: Handle cases like 'for i in list'
+            pass
+        else:
+            sys.exit("ForToCOQ Error: Unknown token used as range")
+        
 
     def __str__(self):
         return self.translation
@@ -54,7 +67,7 @@ class WhileToCOQ():
         self.block = transform["block"]
         
         # Definition:
-        self.translation = f"Fixpoint while_loop ({self.condition["lhe"]} : nat) : nat :=\n\tif {self.condition["lhe"]} {self.condition["operator"]}? {self.condition["rhe"]} then\n\t\twhile_loop ({self.block[0]["value"]["lhe"]} {self.block[0]["value"]["operator"]} {self.block[0]["value"]["rhe"]})\n\telse\n\t\t{self.condition["lhe"]}.\n"
+        self.translation = f"Fixpoint while_loop ({self.condition["lhe"] if isinstance(self.condition["lhe"], str) else self.condition["lhe"]["variable"]} : nat) : nat :=\n\tif {self.condition["lhe"] if isinstance(self.condition["lhe"], str) else self.condition["lhe"]["variable"]} {self.condition["operator"]}? {self.condition["rhe"]} then\n\t\twhile_loop ({self.condition["lhe"] if isinstance(self.condition["lhe"], str) else self.condition["lhe"]["variable"]} {self.block[0]["value"]["operator"]} {self.block[0]["value"]["rhe"]})\n\telse\n\t\t{self.condition["lhe"] if isinstance(self.condition["lhe"], str) else self.condition["lhe"]["variable"]}.\n"
 
     def __str__(self):
         return self.translation
@@ -62,15 +75,27 @@ class WhileToCOQ():
 class PythonToCOQ(Transformer):
     visit_tokens = True
 
+    variables = []
+    flags = []
+
     def flag_stmt(self, args):
         marker, content = args
-        return {
+        flag = {
             "type": "flag",
             "content": content
         }
+        self.flags.append(flag)
+        return flag
 
     def number(self, args):
-        return args[0].value
+        try:
+            return int(args[0].value)
+        except ValueError:
+            try:
+                return float(args[0].value)
+            except ValueError:
+                return sys.exit("PythonToCOQ Error: Invalid number value")
+        
 
     def string(self, args):
         return args[0].value[1:-1].replace('\\"', '"')
@@ -82,7 +107,14 @@ class PythonToCOQ(Transformer):
         return args[0].value
 
     def var(self, args):
-        return args[0]
+        variable = next(
+            (v for v in self.variables if v.get('variable') == args[0]),
+            None
+        )
+        if variable == None:
+            return args[0]
+        else:
+            return variable
 
     def list_(self, args):
         return args
@@ -92,6 +124,7 @@ class PythonToCOQ(Transformer):
 
     def comparison(self, args):
         return {
+            "type": "comparison",
             "lhe": args[0],
             "operator": args[1],
             "rhe": args[2]
@@ -99,7 +132,7 @@ class PythonToCOQ(Transformer):
     
     def return_stmt(self, args):
         return {
-            "type": "return",
+            "type": "return_stmt",
             "expression": args[0]
         }
     
@@ -127,17 +160,51 @@ class PythonToCOQ(Transformer):
     
     def arith_expr(self, args):
         return {
+            "type": "arith_expr",
             "lhe": args[0],
             "operator": args[1].value,
             "rhe": args[2]
         }
 
     def assign_stmt(self, args):
-        return {
+        variable = args[0][0]
+        value = args[0][1]
+        data_type = None
+        match args[0][1]:
+            case int():
+                data_type = "int"
+            case float():
+                data_type = "float"
+            case str():
+                data_type = "str"
+            case list():
+                data_type = "list"
+            case dict():
+                # TODO: Change in the future to allow for dict objects
+                if "type" in value:
+                    match value["type"]:
+                        case "assignment":
+                            data_type = value["data_type"]
+                        case "arith_expr":
+                            if "data_type" in value["lhe"]:
+                                data_type = value["lhe"]["data_type"]
+                            elif "data_type" in value["rhe"]:
+                                data_type = value["rhe"]["data_type"]
+                            else:
+                                sys.exit("PythonToCOQ Error: Variables have no data type")
+                        case _:
+                            sys.exit("PythonToCOQ Error: Unsupported scenario type")
+            case _:
+                sys.exit("PythonToCOQ Error: Unsupported data type")
+        
+        variable = {
             "type": "assignment",
-            "variable": args[0][0],
-            "value": args[0][1],
+            "data_type": data_type,
+            "variable": variable,
+            "value": value,
         }
+        self.variables.append(variable)
+        return variable
 
     def parameters(self, args):
         return [x for x in filter(lambda x : x != None, args)]
@@ -170,6 +237,7 @@ class PythonToCOQ(Transformer):
         }
 
     def for_stmt(self, args):
+        # print(args)
         return {
             "type": "for",
             "iterable": args[0],
@@ -185,9 +253,9 @@ class PythonToCOQ(Transformer):
         }
     
     def file_input(self, args):
-        print(args)
         blocks = []
         for transform in args:
+            # print(transform)
             match transform["type"]:
                 case "if":
                     blocks.append(str(IfToCOQ(transform)))

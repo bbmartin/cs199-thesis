@@ -1,4 +1,7 @@
-#f: x = 0
-x = 0
-for i in range(10):
-    x = x + i
+#f: x = "green"
+if x == "green":
+    return "yellow"
+elif x == "yellow":
+    return "red"
+else:
+    return "green"
