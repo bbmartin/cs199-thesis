@@ -1,5 +1,31 @@
-match x with
-| green => yellow
-| yellow => red
-| _ => green
-end.
+Inductive A : Type :=
+	| red
+	| green
+	| yellow
+
+Definition if_struct (x : A) : A :=
+	match x with
+	| green => yellow
+	| yellow => red
+	| _ => green
+	end.
+
+Fixpoint for_loop {A : Type}
+	(init : A)
+	(start end : nat)
+	(body : nat -> A -> A)
+	: A :=
+	if start <? end then
+		for_loop (body start init) (start + 1) end body
+	else
+		init
+
+Definition for_loop_operation (n : nat) : nat :=
+	for_loop 0 0 10 (fun i y => y + i)
+
+Fixpoint while_loop (z : nat) : nat :=
+	if z <? 10 then
+		while_loop (z + 1)
+	else
+		z.
+
