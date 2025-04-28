@@ -114,6 +114,14 @@ class PythonToCOQ(Transformer):
         #   '#s<n>:' => Scenario (int, list, or str manipulation)
         #   '#v<n>:' => Variables (for context)
         #   '#p<n>:' => Possible Variables (in the form of a set)
+        #
+        # Model:
+        # {
+        #   "type": "flag",
+        #   "scenario": (value is a str that can either be <int, str, or list>),
+        #   "variables": (list of variables that were assigned earlier and is used for context),
+        #   "possible_values": (set of possible values)
+        # }
 
         flag_type = None
         match = None
