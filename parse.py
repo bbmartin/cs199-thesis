@@ -1,6 +1,5 @@
 import math
 import os.path
-import re
 
 from lark import Lark
 from lark.indenter import PythonIndenter
@@ -18,19 +17,69 @@ class IfToCOQ():
         self.else_ = transform["else"]
         self.flags = flags
 
-        # Possible Values
-        self.translation = "Inductive A : Type :=\n"
-        for pv in self.flags["possible_values"]:
-            self.translation += f"\t| {str(pv)}\n"
-        
-        # if:
-        self.translation += f"\nDefinition if_struct ({self.condition["lhe"]} : A) : A :=\n\tmatch {self.condition["lhe"]} with\n\t| {self.condition["rhe"]} => {self.__get_rhe_val(self.block[0])}"
-        # elif:
-        for elif_ in self.elif_: 
-            self.translation += f"\n\t| {elif_["condition"]["rhe"]} => {self.__get_rhe_val(elif_["block"][0])}"
-        # else:
-        self.translation += f"\n\t| _ => {self.__get_rhe_val(self.else_["block"][0])}\n\tend.\n\n"
+        self.translation = self.__get_translation(self.flags["scenario"])
 
+    def __get_translation(self, scenario):
+        translation = ""
+        
+        # int
+        if scenario == "int":
+            comparison_operators = {
+                "<": "Z.ltb",
+                "<=": "Z.leb",
+                ">": "Z.gtb",
+                ">=": "Z.geb",
+                "==": "Z.eqb",
+                "!=": "negb"
+            }
+            
+            # Definition
+            translation += f"Definition if_struct ({self.condition["lhe"]} : Z) : Z :=\n"
+            
+            # If
+            if self.condition["operator"] != "!=":
+                translation += f"\tif {comparison_operators[self.condition["operator"]]} x ({self.condition["rhe"]}) then\n\t\t{self.__get_rhe_val(self.block[0])}{"." if self.else_ is None else ""}\n"
+            else:
+                translation += f"\tif {comparison_operators[self.condition["operator"]]} (Z.eqb x ({self.condition["rhe"]})) then\n\t\t{self.__get_rhe_val(self.block[0])}{"." if self.else_ is None else ""}\n"
+            
+            # Elif
+            for elif_ in self.elif_:
+                if self.condition["operator"] != "!=":
+                    translation += f"\telse if {comparison_operators[elif_["condition"]["operator"]]} x ({elif_["condition"]["rhe"]}) then\n\t\t{self.__get_rhe_val(elif_["block"][0])}\n"
+                else:
+                    translation += f"\telse if {comparison_operators[elif_["condition"]["operator"]]} (Z.eqb x ({elif_["condition"]["rhe"]})) then\n\t\t{self.__get_rhe_val(elif_["block"][0])}\n"
+            
+            # Else
+            translation += f"\telse\n\t\t{self.__get_rhe_val(self.else_["block"][0])}.\n\n"
+        # str
+        elif scenario == "str":
+            # Definition
+            translation += f"Definition if_struct ({self.condition["lhe"]} : string) : string :=\n"
+            
+            # If
+            if self.condition["operator"] == "==":
+                translation += f"\tif string_dec x \"{self.condition["rhe"]}\"%string then\n\t\t\"{self.__get_rhe_val(self.block[0])}\"%string{"." if self.else_ is None else ""}\n"
+            elif self.condition["operator"] == "!=":
+                translation += f"\tif negb (string_dec x \"{self.condition["rhe"]}\"%string) then\n\t\t\"{self.__get_rhe_val(self.block[0])}\"%string{"." if self.else_ is None else ""}\n"
+            else:
+                sys.exit("IfToCOQ Error: Unsupported comparison operator for strings (if)")
+            
+            # Elif
+            for elif_ in self.elif_:
+                if self.condition["operator"] == "==":
+                    translation += f"\telse if string_dec x \"{elif_["condition"]["rhe"]}\"%string then\n\t\t\"{self.__get_rhe_val(elif_["block"][0])}\"%string\n"
+                elif self.condition["operator"] == "!=":
+                    translation += f"\telse if negb (string_dec x \"{elif_["condition"]["rhe"]}\"%string) then\n\t\t\"{self.__get_rhe_val(elif_["block"][0])}\"%string\n"
+                else:
+                    sys.exit("IfToCOQ Error: Unsupported comparison operator for string (elif)")
+            
+            # Else
+            translation += f"\telse\n\t\t\"{self.__get_rhe_val(self.else_["block"][0])}\"%string.\n\n"
+        else:
+            sys.exit("IfToCOQ Error: Unknown scenario type")
+
+        return translation
+    
     def __get_rhe_val(self, block):
         match block["type"]:
             case "assignment":
@@ -53,6 +102,8 @@ class IfToCOQ():
 class ForToCOQ():
 
     def __init__(self, transform, flags):
+        # print("Transform: ", transform)
+
         self.supported_range_functions = ["range"]
         self.iterable = transform["iterable"]
         self.range = transform["range"]
@@ -60,32 +111,101 @@ class ForToCOQ():
         self.flags = flags
         
         # Definition:
-        self.translation = "Fixpoint for_loop {A : Type}\n\t(init : A)\n\t(start end : nat)\n\t(body : nat -> A -> A)\n\t: A :=\n\tif start <? end then\n\t\tfor_loop (body start init) (start + 1) end body\n\telse\n\t\tinit\n\n"
+        self.translation = self.__get_translation(self.flags["scenario"])
         
-        if self.range["type"] == "function":
-            match self.range["name"]:
-                case "range":
-                    # range()
-                    start = int(self.range["parameters"][0]) if len(self.range["parameters"]) > 1 else 0
-                    stop = int(self.range["parameters"][1]) if len(self.range["parameters"]) == 2 else int(self.range["parameters"][0])
-                    step = int(self.range["parameters"][2]) if len(self.range["parameters"]) == 3 else 1
-                    end = start + math.floor((stop - start - 1)/step) * step
-                    
-                    init_var = next(
-                        (var for var in self.flags["variables"] if var.get("variable") == self.block[0]["value"]["lhe"]),
-                        None
-                    )
+    def __get_translation(self, scenario):
+        translation = ""
 
-                    # Operation:
-                    self.translation = self.translation + f"Definition for_loop_operation (n : nat) : nat :=\n\tfor_loop {init_var["value"] if init_var is not None else '0'} 0 {str(end + 1)} (fun {self.iterable} {self.block[0]["variable"]} => {self.block[0]["value"]["lhe"]} {self.block[0]["value"]["operator"]} {self.block[0]["value"]["rhe"]})\n\n"
-                case _:
-                    sys.exit("ForToCOQ Error: Unsupported function used as range")
-        elif self.range["type"] == "assignment":
-            #TODO: Handle cases like 'for i in list'
-            pass
+        # int
+        if scenario == "int":
+            if self.range["type"] == "function":
+                match self.range["name"]:
+                    case "range":
+                        translation += "Fixpoint for_loop {A : Type}\n\t(init : A)\n\t(start end : nat)\n\t(body : nat -> A -> A)\n\t: A :=\n\tif start <? end then\n\t\tfor_loop (body start init) (start + 1) end body\n\telse\n\t\tinit\n\n"
+
+                        # range()
+                        start = int(self.range["parameters"][0]) if len(self.range["parameters"]) > 1 else 0
+                        stop = int(self.range["parameters"][1]) if len(self.range["parameters"]) == 2 else int(self.range["parameters"][0])
+                        step = int(self.range["parameters"][2]) if len(self.range["parameters"]) == 3 else 1
+                        end = start + math.floor((stop - start - 1)/step) * step
+                        
+                        init_var = next(
+                            (var for var in self.flags["variables"] if var.get("variable") == self.block[0]["value"]["lhe"]),
+                            None
+                        )
+
+                        # Operation:
+                        translation += f"Definition for_loop_operation (n : nat) : nat :=\n\tfor_loop {init_var["value"] if init_var is not None else '0'} 0 {str(end + 1)} (fun {self.iterable} {self.block[0]["variable"]} => {self.block[0]["value"]["lhe"]} {self.block[0]["value"]["operator"]} {self.block[0]["value"]["rhe"]})\n\n"
+                    case _:
+                        sys.exit("ForToCOQ Error: Unsupported function used as range")
+            elif self.range["type"] == "assignment":
+                match self.range["data_type"]:
+                    case "list":
+                        # Definition:
+                        translation += "Fixpoint for_loop_list {A B : Type}\n\t(op : A -> B -> B)\n\t(init : B)\n\t(lst : list A)\n: B :=\n\tmatch lst with\n\t| [] => init\n\t| x :: xs => for_loop_list op (op x init) xs\n\tend.\n\n"
+
+                        init_var = next(
+                            (var for var in self.flags["variables"] if var.get("variable") == self.block[0]["value"]["lhe"]),
+                            None
+                        )
+
+                        if init_var is None:
+                            sys.exit(f"ForToCOQ Error: Unknown variable '{self.block[0]["value"]["lhe"]}'")
+
+                        # Operation
+                        operation = f"(fun x acc => acc {self.block[0]["value"]["operator"]} x)"
+                        translation += f"Definition for_loop_list_operation (nums : list nat) : nat :=\n\tfor_loop_list {operation} {init_var["value"]} nums\n\n"
+                    case _:
+                        sys.exit("ForToCOQ Error: Unknown data type for range object")
+            else:
+                sys.exit("ForToCOQ Error: Unknown token used as range")
+        # str
+        elif scenario == "str":
+            # Definition
+            translation += "Fixpoint for_loop {A : Type}\n\t(init : A)\n\t(start end : nat)\n\t(body : nat -> A -> A)\n\t: A :=\n\tif start <? end then\n\t\tfor_loop (body start init) (start + 1) end body\n\telse\n\t\tinit\n\n"
+
+            if self.range["type"] == "function":
+                match self.range["name"]:
+                    case "range":
+                        # range()
+                        start = int(self.range["parameters"][0]) if len(self.range["parameters"]) > 1 else 0
+                        stop = int(self.range["parameters"][1]) if len(self.range["parameters"]) == 2 else int(self.range["parameters"][0])
+                        step = int(self.range["parameters"][2]) if len(self.range["parameters"]) == 3 else 1
+                        end = start + math.floor((stop - start - 1)/step) * step
+                        
+                        init_var = next(
+                            (var for var in self.flags["variables"] if var.get("variable") == self.block[0]["value"]["lhe"]),
+                            None
+                        )
+
+                        if self.block[0]["value"]["operator"] != "+":
+                            sys.exit("ForToCOQ Error: Unsupported string operation")
+
+                        # Operation:
+                        translation += f"Definition for_loop_operation : string :=\n\tfor_loop \"{init_var["value"] if init_var is not None else ""}\"%string {start} {str(end + 1)} (fun _ acc => acc ++ \"{self.block[0]["value"]["rhe"]}\"%string).\n\n"
+                    case _:
+                        sys.exit("ForToCOQ Error: Unsupported function used as range")
+            elif self.range["type"] == "assignment":
+                match self.range["data_type"]:
+                    case "list":
+                        init_var = next(
+                            (var for var in self.flags["variables"] if var.get("variable") == self.block[0]["value"]["lhe"]),
+                            None
+                        )
+
+                        if init_var is None:
+                            sys.exit(f"ForToCOQ Error: Unknown variable '{self.block[0]["value"]["lhe"]}'")
+
+                        # Operation
+                        translation += f"Definition for_loop_operation : string :=\n\tfor_loop \"{init_var["value"] if init_var is not None else ""}\"%string 0 (length strings) (fun {self.iterable} acc => acc ++ (nth {self.iterable} strings \"\"%string)).\n\n"
+                    case _:
+                        sys.exit("ForToCOQ Error: Unknown data type for range object")
+            else:
+                sys.exit("ForToCOQ Error: Unknown token used as range")
         else:
-            sys.exit("ForToCOQ Error: Unknown token used as range")
+            sys.exit("ForToCOQ Error: Unsupported scenario type")
         
+        return translation
 
     def __str__(self):
         return self.translation
@@ -97,7 +217,21 @@ class WhileToCOQ():
         self.flags = flags
         
         # Definition:
-        self.translation = f"Fixpoint while_loop ({self.condition["lhe"] if isinstance(self.condition["lhe"], str) else self.condition["lhe"]["variable"]} : nat) : nat :=\n\tif {self.condition["lhe"] if isinstance(self.condition["lhe"], str) else self.condition["lhe"]["variable"]} {self.condition["operator"]}? {self.condition["rhe"]} then\n\t\twhile_loop ({self.condition["lhe"] if isinstance(self.condition["lhe"], str) else self.condition["lhe"]["variable"]} {self.block[0]["value"]["operator"]} {self.block[0]["value"]["rhe"]})\n\telse\n\t\t{self.condition["lhe"] if isinstance(self.condition["lhe"], str) else self.condition["lhe"]["variable"]}.\n\n"
+        self.translation = self.__get_translation(self.flags["scenario"])
+
+    def __get_translation(self, scenario):
+        translation = ""
+
+        if scenario == "int":
+            # Definition:
+            translation += f"Fixpoint while_loop ({self.condition["lhe"] if isinstance(self.condition["lhe"], str) else self.condition["lhe"]["variable"]} : nat) : nat :=\n\tif {self.condition["lhe"] if isinstance(self.condition["lhe"], str) else self.condition["lhe"]["variable"]} {self.condition["operator"]}? {self.condition["rhe"]} then\n\t\twhile_loop ({self.condition["lhe"] if isinstance(self.condition["lhe"], str) else self.condition["lhe"]["variable"]} {self.block[0]["value"]["operator"]} {self.block[0]["value"]["rhe"]})\n\telse\n\t\t{self.condition["lhe"] if isinstance(self.condition["lhe"], str) else self.condition["lhe"]["variable"]}.\n\n"
+        elif scenario == "str":
+            # Definition:
+            translation += f"Fixpoint while_loop_str ({self.condition["lhe"] if isinstance(self.condition["lhe"], str) else self.condition["lhe"]["variable"]} : string) (count : nat) : string :=\n\tif count {self.condition["operator"]}? {self.condition["rhe"]} then\n\t\twhile_loop_str ({self.condition["lhe"] if isinstance(self.condition["lhe"], str) else self.condition["lhe"]["variable"]} ++ \"{self.block[0]["value"]["rhe"]}\"%string)\n\telse\n\t\t{self.condition["lhe"] if isinstance(self.condition["lhe"], str) else self.condition["lhe"]["variable"]}.\n\n"
+        else:
+            sys.exit("WhileToCOQ Error: Unsupported scenario type")
+        
+        return translation
 
     def __str__(self):
         return self.translation
@@ -106,6 +240,7 @@ class PythonToCOQ(Transformer):
     visit_tokens = True
     variables = []
     flags = []
+    curr_flag_index = None
 
     def flag_stmt(self, args):
         marker, content = args
@@ -119,7 +254,7 @@ class PythonToCOQ(Transformer):
         # {
         #   "type": "flag",
         #   "scenario": (value is a str that can either be <int, str, or list>),
-        #   "variables": (list of variables that were assigned earlier and is used for context),
+        #   "variables": (list of variables to be used for context),
         #   "possible_values": (set of possible values)
         # }
 
@@ -127,17 +262,19 @@ class PythonToCOQ(Transformer):
         match = None
         if "s" in marker:
             flag_type = "s"
-            match = re.search(r'#s(\d+):', marker)
+
+            if (self.curr_flag_index is None):
+                self.curr_flag_index = 0
+            else:
+                self.curr_flag_index += 1
         elif "v" in marker:
             flag_type = "v"
-            match = re.search(r'#v(\d+):', marker)
         elif "p" in marker:
             flag_type = "p"
-            match = re.search(r'#p(\d+):', marker)
         else:
             sys.exit("PythonToCOQ Error: Unknown flag type")
         
-        index = int(match.group(1))
+        index = self.curr_flag_index
         if index < 0:
             sys.exit("PythonToCOQ Error: Invalid flag index")
         
@@ -149,7 +286,7 @@ class PythonToCOQ(Transformer):
             self.flags[index] = {
                 "type": "flag",
                 "scenario": None,
-                "variables": [],
+                "variables": None,
                 "possible_values": None
             }
 
@@ -157,7 +294,7 @@ class PythonToCOQ(Transformer):
             case "s":
                 self.flags[index]["scenario"] = content
             case "v":
-                self.flags[index]["variables"].append(content)
+                self.flags[index]["variables"] = content
             case "p":
                 self.flags[index]["possible_values"] = content
             case _:
@@ -284,12 +421,21 @@ class PythonToCOQ(Transformer):
             "value": value,
         }
 
-        exists = next(
-            (var for var in self.variables if var.get("variable") == variable),
+        existing_var = next(
+            (var for var in self.variables if var.get("variable") == variable["variable"]),
             None
         )
-        if (exists is None):
+        if (existing_var is None):
             self.variables.append(variable)
+
+        # Replace variable declarations in current flag
+        var_dec = next(
+            (var for var in self.flags[self.curr_flag_index]["variables"] if var == variable["variable"]),
+            None
+        )
+        if var_dec is not None:
+            flag_var_index = self.flags[self.curr_flag_index]["variables"].index(var_dec)
+            self.flags[self.curr_flag_index]["variables"][flag_var_index] = variable
 
         return variable
 
@@ -325,10 +471,20 @@ class PythonToCOQ(Transformer):
 
     def for_stmt(self, args):
         # print(args)
+        range_ = args[1]
+        if isinstance(range_, str) and range_ in [variable["variable"] for variable in self.variables]:
+            range_ = next(
+                (var for var in self.variables if var["variable"] == range_),
+                None
+            )
+
+            if range_ is None:
+                sys.exit("PythonToCOQ Error: Unknown range object")
+
         return {
             "type": "for",
             "iterable": args[0],
-            "range": args[1],
+            "range": range_,
             "block": args[2]
         }
 
@@ -342,13 +498,17 @@ class PythonToCOQ(Transformer):
     
     def file_input(self, args):
         blocks = []
+
         # Filter out certain code blocks
         ignore_list = ["flag", "assignment"]
         transforms = list(filter(lambda x: x["type"] not in ignore_list, args))
-        # print("transforms: ", transforms)
+
+        if len(transforms) < len(self.flags):
+            sys.exit("PythonToCOQ Error: Flag count exceed the number of code blocks")
+
         for transform in transforms:
             pass_flags = self.flags[transforms.index(transform)] if transforms.index(transform) < len(self.flags) else []
-            print("Passed flags: ", pass_flags)
+            # print("Passed flags: ", pass_flags)
             match transform["type"]:
                 case "if":
                     blocks.append(str(IfToCOQ(transform, pass_flags)))
@@ -358,9 +518,11 @@ class PythonToCOQ(Transformer):
                     blocks.append(str(WhileToCOQ(transform, pass_flags)))
                 case _:
                     blocks.append("")
-        GenerateTheorem(args)
+        
+        # Include any imports
+        blocks.insert(0, "Require Import String.\nRequire Import Arith.Compare_dec.\nRequire Import ZArith.\n\n")
 
-        return blocks, GenerateTheorem(args)
+        return blocks
 
 def _read(fn, *args):
     kwargs = {'encoding': 'iso-8859-1'}

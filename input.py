@@ -1,6 +1,6 @@
-#s0: str
-#v0: x = "yellow"
-#p0: {"green", "yellow", "red"}
+#s: str
+#v: [x]
+#p: {"green", "yellow", "red"}
 x = "yellow"
 if x == "green":
     x = "yellow"
@@ -9,13 +9,15 @@ elif x == "yellow":
 else:
     x = "green"
 
-#s1: int
-#v1: y = 0
+#s: int
+#v: [y, items]
 y = 0
-for i in range(10):
+items = [1, 2, 3, 4, 5]
+for i in items:
     y = y + i
 
-#s2: int
-#v2: z = 0
+#s: str
+#v: [z]
+z = ""
 while z < 10:
-    z = z + 1
+    z = z + "a"
