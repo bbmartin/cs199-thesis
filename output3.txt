@@ -1,0 +1,31 @@
+Require Import String.
+Require Import Arith.Compare_dec.
+Require Import ZArith.
+
+Definition if_struct (x : string) : string :=
+	if string_dec x "green"%string then
+		"yellow"%string
+	else if string_dec x "yellow"%string then
+		"red"%string
+	else
+		"green"%string.
+
+Fixpoint for_loop_list {A B : Type}
+	(op : A -> B -> B)
+	(init : B)
+	(lst : list A)
+: B :=
+	match lst with
+	| [] => init
+	| x :: xs => for_loop_list op (op x init) xs
+	end.
+
+Definition for_loop_list_operation (nums : list nat) : nat :=
+	for_loop_list (fun x acc => acc + x) 0 nums
+
+Fixpoint while_loop_str (z : string) (count : nat) : string :=
+	if count <? 10 then
+		while_loop_str (z ++ "a"%string)
+	else
+		z.
+

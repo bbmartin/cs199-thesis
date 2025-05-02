@@ -1,0 +1,25 @@
+Fixpoint for_loop {A : Type}
+	(init : A)
+	(start end : nat)
+	(body : nat -> A -> A)
+	: A :=
+	if start <? end then
+		for_loop (body start init) (start + 1) end body
+	else
+		init
+
+Definition for_loop_operation (n : nat) : nat :=
+	for_loop 0 0 10 (fun i x => x + i)
+
+
+Theorem sum_first_n :
+  forall (n : nat),
+    loop n 0 = n * (n + 1) / 2.
+Proof.
+  intros n.
+  induction n.
+  - simpl. reflexivity.
+  - simpl. rewrite IHn. 
+    unfold loop at 1.
+  ring.
+Qed.

@@ -5,39 +5,185 @@ class TheoremGenerator:
     def generate(self, parsed_ast):
         for node in parsed_ast:
             if node["type"] == "for":
-                loop_var = node["iterable"]
-                loop_range = node["range"]
-                if loop_range["name"] == "range":
-                    n = int(loop_range["parameters"][0])
-
-                    for stmt in node["block"]:
-                        if stmt["type"] == "assignment":
-                            lhs = stmt["variable"]
-                            rhs = stmt["value"]
-
-                            if (
-                                isinstance(rhs, dict)
-                                and rhs["lhe"] == lhs
-                                and rhs["operator"] == "+"
-                                and rhs["rhe"] == loop_var
-                            ):
-                                self.theorem = self.write_arithmetic_summation_theorem(
-                                    n
-                                )
-
-                            if (
-                                isinstance(rhs, dict)
-                                and rhs["lhe"] == lhs
-                                and rhs["operator"] == "*"
-                                and rhs["rhe"] == loop_var
-                            ):
-                                self.theorem = self.write_arithmetic_product_theorem(n)
+                self.analyze_for(node)
 
             elif node["type"] == "if":
                 self.analyze_conditional(node)
 
+            elif node["type"] == "while":
+                self.analyze_while(node)
+
         return self.theorem
-  
+
+    def analyze_while(self, node):
+        theorems = []
+        z_assignment = node["block"][0]
+        if (
+            z_assignment.get("type") == "assignment"
+            and isinstance(z_assignment.get("value"), dict)
+            and z_assignment["value"].get("operator") == "+"
+        ):
+            theorems.append(self.generate_while_loop_length_theorem())
+
+        if self.is_string_append(node):
+            theorems.append(self.write_string_append_theorem())
+
+    def write_string_append_theorem(self):
+        theorem = """
+        Lemma append_a_increases_length :
+          forall s, String.length (s ++ "a"%char) = S (String.length s).
+        Proof.
+          intros s. rewrite String.append_length. simpl. lia.
+        Qed.
+
+        Lemma {func_name}_length_invariant :
+          forall z count max_count,
+            count <= max_count ->
+            String.length ({func_name} z count max_count) = String.length z + (max_count - count).
+        Proof.
+          intros z count max_count Hle.
+          revert z.
+          induction count using lt_wf_ind.
+          intros z.
+          destruct (count <? max_count) eqn:Hlt.
+          - apply Nat.ltb_lt in Hlt.
+            rewrite <- Nat.add_1_r.
+            simpl.
+            rewrite <- append_a_increases_length.
+            specialize (H (count + 1)).
+            assert (count + 1 <= max_count) by lia.
+            specialize (H H0 (z ++ "a"%char)).
+            rewrite String.append_length.
+            simpl in H.
+            lia.
+          - apply Nat.ltb_ge in Hlt.
+            simpl. lia.
+        Qed.
+
+        Theorem {func_name}_final_length :
+          forall max_count,
+            String.length ({func_name} EmptyString 0 max_count) = max_count.
+        Proof.
+          intros. apply {func_name}_length_invariant. lia.
+        Qed.
+        """
+        return theorem
+    
+    def write_while_loop_termination_theorem(func_name="while_loop_str", target=10):
+      return f"""
+      Theorem {func_name}_terminates :
+        forall z,
+          exists result, {func_name} z 0 = result.
+      Proof.
+        exists ({func_name} z 0).
+        reflexivity.
+      Qed.
+      """
+
+    def is_string_append(self, node):
+      condition = node["condition"]
+      lhe = condition["lhe"]
+      rhe = condition["rhe"]
+      op = condition["operator"]
+
+      block = node["block"][0]
+      
+      if (block["type"] == "assignment"
+          and block["data_type"] == "str"
+          and isinstance(block["value"], dict)):
+          value = block["value"]
+          if (
+              value["type"] == "arith_expr"
+              and value["operator"] == "+"
+              and value["lhe"] == block["variable"]
+          ):
+              if (lhe == block["variable"] 
+                  and isinstance(rhe, int)
+                  and (op == "<" or op == "<=")
+                ):
+                  return True
+      return False
+    
+    def is_while_terminating(node):
+      condition = node["condition"]
+      lhe = condition["lhe"]
+      rhe = condition["rhe"]
+      op = condition["operator"]
+
+      if op not in ["<", ">", "<=", ">="] or not isinstance(rhe, int):
+          return False
+      
+      for stmt in node.get("block", []):
+          if (
+              stmt.get("type") == "assignment"
+              and stmt.get("variable") == lhe
+              and isinstance(stmt.get("value"), dict)
+              and stmt["value"].get("type") == "arith_expr"
+              and stmt["value"].get("lhe") == lhe
+              and stmt["value"].get("operator") in ["+", "-"]
+              and stmt["value"].get("rhe") == 1
+          ):
+              return True
+
+      return False
+
+      
+    def analyze_for(self, node):
+        theorems = []
+        loop_var = node["iterable"]
+        loop_range = node["range"]
+        if ("name" in loop_range and loop_range["name"] == "range"):
+            n = int(loop_range["parameters"][0])
+            for stmt in node["block"]:
+                if stmt["type"] == "assignment":
+                    lhs = stmt["variable"]
+                    rhs = stmt["value"]
+
+                    if (
+                        isinstance(rhs, dict)
+                        and rhs["lhe"] == lhs
+                        and rhs["operator"] == "+"
+                        and rhs["rhe"] == loop_var
+                    ):
+                        self.theorem = self.write_arithmetic_summation_theorem(
+                            n
+                        )
+
+                    if (
+                        isinstance(rhs, dict)
+                        and rhs["lhe"] == lhs
+                        and rhs["operator"] == "*"
+                        and rhs["rhe"] == loop_var
+                    ):
+                        self.theorem = self.write_arithmetic_product_theorem(n)
+        else:
+            block = node["block"]
+            if len(block) == 1:
+                assign = block[0]
+                if (
+                    assign.get("type") == "assignment"
+                    and isinstance(assign["value"], dict)
+                    and assign["value"].get("type") == "arith_expr"
+                ):
+                    op = assign["value"].get("operator")
+                    if op == "+":
+                        theorems.append(self.write_for_loop_sum_theorem())
+                    elif op == "*":
+                        theorems.append(self.write_arithmetic_product_theorem())
+
+    def write_for_loop_sum_theorem(self):
+        theorem = """
+        Theorem {func_name}_correct :
+        forall l,
+        {func_name} l = fold_left Nat.add l 0.
+        Proof.
+          intros l. induction l as [|h t IH].
+          - reflexivity.
+          - simpl. rewrite <- IH. reflexivity.
+        Qed.
+        """
+        return theorem
+
     def write_arithmetic_summation_theorem(self):
         theorem = """
     Theorem sum_first_n :
@@ -78,7 +224,7 @@ class TheoremGenerator:
     Qed.
     """
         return theorem
-    
+
     def analyze_conditional(self, node):
         theorems = []
 
