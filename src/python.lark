@@ -270,9 +270,9 @@ _NEWLINE: ( /\r?\n[\t ]*/ | COMMENT )+
 
 !name: NAME | "match" | "case"
 NAME: /[^\W\d]\w*/
-FLAG_MARKER: "#f:"
+FLAG_MARKER: /#(?:s|v|p):/
 flag_stmt: FLAG_MARKER (test | assign_stmt)
-COMMENT: /#(?!f:)[^\n]*/
+COMMENT: /#(?!(?:s|v|p):)[^\n]*/
 
 STRING: /([ubf]?r?|r[ubf])("(?!"").*?(?<!\\)(\\\\)*?"|'(?!'').*?(?<!\\)(\\\\)*?')/i
 LONG_STRING: /([ubf]?r?|r[ubf])(""".*?(?<!\\)(\\\\)*?"""|'''.*?(?<!\\)(\\\\)*?''')/is

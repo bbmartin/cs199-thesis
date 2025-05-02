@@ -489,7 +489,6 @@ class PythonToCOQ(Transformer):
         }
 
     def while_stmt(self, args):
-        # print(args)
         return {
             "type": "while",
             "condition": args[0],
@@ -528,56 +527,6 @@ def _read(fn, *args):
     kwargs = {'encoding': 'iso-8859-1'}
     with open(fn, *args, **kwargs) as f:
         return f.read()
-    
-def GenerateTheorem(parsed_ast):
-    theorem = "No recognizable theorem pattern found."
-    for node in parsed_ast:
-        if node["type"] == "for":
-            loop_var = node["iterable"]
-            loop_range = node["range"]
-            if loop_range["name"] == "range":
-                n = int(loop_range["parameters"][0])
-
-                for stmt in node["block"]:
-                    if stmt["type"] == "assignment":
-                        lhs = stmt["variable"]
-                        rhs = stmt["value"]
-
-                        if (isinstance(rhs, dict) and
-                            rhs["lhe"] == lhs and
-                            rhs["operator"] == "+" and
-                            rhs["rhe"] == loop_var):
-                            
-                            theorem = write_arithmetic_summation_theorem(n)
-
-                        if (isinstance(rhs, dict) and
-                            rhs["lhe"] == lhs and
-                            rhs["operator"] == "*" and
-                            rhs["rhe"] == loop_var):
-
-                            theorem = write_arithmetic_product_theorem(n)
-
-    return theorem
-
-def write_arithmetic_summation_theorem(n):
-  theorem = """
-Theorem sum_first_n :
-  forall (n : nat),
-    loop n 0 = n * (n + 1) / 2.
-Proof.
-  intros n.
-  induction n.
-  - simpl. reflexivity.
-  - simpl. rewrite IHn. 
-    unfold loop at 1.
-  ring.
-Qed.
-"""
-  return theorem
-
-def write_arithmetic_product_theorem(n):
-  theorem = """"""
-  return theorem
 
 if __name__ == '__main__':
     input_filepath = sys.argv[1]
@@ -593,9 +542,5 @@ if __name__ == '__main__':
 
     parse_tree = python3_parser.parse(_read(input_filepath) + "\n")
     # print(parse_tree.pretty())
-    blocks, theorem = PythonToCOQ().transform(parse_tree)
-    for block in blocks:
+    for block in PythonToCOQ().transform(parse_tree):
         output_file.write(block)
-
-    output_file.write(theorem)
-    output_file.close()
