@@ -1,1 +1,0 @@
-"""Python to COQ Translator."""

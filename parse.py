@@ -541,6 +541,5 @@ if __name__ == '__main__':
         output_file.truncate(0)
 
     parse_tree = python3_parser.parse(_read(input_filepath) + "\n")
-    # print(parse_tree.pretty())
     for block in PythonToCOQ().transform(parse_tree):
         output_file.write(block)
