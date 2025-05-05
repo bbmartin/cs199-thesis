@@ -1,21 +1,26 @@
+import json
+
+
 class TheoremGenerator:
     
     def __init__(self):
         self.theorem = []
 
     def generate(self, parsed_ast):
+        possible_values = []
         for node in parsed_ast:
+            if node["type"] == "flag" and node["possible_values"] is not None:            
+                possible_values = list(node["possible_values"])
+                continue
             if node["type"] == "if":
-               for theorem in self.analyze_conditional(node):
+               for theorem in self.analyze_conditional(node, possible_values):
                     self.theorem.append(theorem)
             elif node["type"] == "for":
                 for theorem in self.analyze_for(node):
                     self.theorem.append(theorem)
-                self.theorem.append(self.analyze_for(node))
             elif node["type"] == "while":
                 for theorem in self.analyze_while(node):
                     self.theorem.append(theorem)
-
         return self.theorem
 
     def analyze_while(self, node):
@@ -131,7 +136,6 @@ Qed."""
         loop_var = node["iterable"]
         loop_range = node["range"]
         if ("name" in loop_range and loop_range["name"] == "range"):
-            n = int(loop_range["parameters"][0])
             for stmt in node["block"]:
                 if stmt["type"] == "assignment":
                     lhs = stmt["variable"]
@@ -143,7 +147,7 @@ Qed."""
                         and rhs["operator"] == "+"
                         and rhs["rhe"] == loop_var
                     ):
-                        theorems.append(self.write_arithmetic_summation_theorem(n))
+                        theorems.append(self.write_arithmetic_summation_theorem())
 
                     if (
                         isinstance(rhs, dict)
@@ -151,7 +155,7 @@ Qed."""
                         and rhs["operator"] == "*"
                         and rhs["rhe"] == loop_var
                     ):
-                        theorems.append(self.write_arithmetic_product_theorem(n))
+                        theorems.append(self.write_arithmetic_product_theorem())
         # else:
         #     block = node["block"]
         #     if len(block) == 1:
@@ -166,7 +170,6 @@ Qed."""
         #                 theorems.append(self.write_for_loop_sum_theorem())
         #             elif op == "*":
         #                 theorems.append(self.write_arithmetic_product_theorem())
-
         return theorems
 
     def write_for_loop_sum_theorem(self, func_name="for_struct"):
@@ -182,6 +185,7 @@ Qed."""
         return theorem
 
     def write_arithmetic_summation_theorem(self):
+
         theorem = """
 Theorem sum_first_n :
   forall (n : nat),
@@ -218,11 +222,13 @@ Proof.
 Qed."""
         return theorem
 
-    def analyze_conditional(self, node):
+    def analyze_conditional(self, node, possible_values):
         theorems = []
 
         domain = set()
         mapping = self.extract_conditional_mapping(node)
+        if not mapping:
+            return theorems
         else_branch = node["else"]
         if (else_branch is not None or self.is_exhaustive(mapping, else_branch)):
             theorems.append(self.write_exhaustiveness_theorem("if_struct", domain))
@@ -232,7 +238,7 @@ Qed."""
             
         cycles = self.check_for_cycles(mapping)
         if cycles:
-          theorems.append(self.write_cycle_theorem("if_struct", cycles))
+          theorems.append(self.write_cycle_theorem("if_struct", cycles, possible_values))
 
         if self.is_idempotent(mapping):
           theorems.append(self.write_idempotency_theorem("if_struct"))
@@ -251,6 +257,8 @@ Qed."""
 
         pattern = if_node["condition"]["rhe"]
         result = if_node["block"][0]["value"]
+        if isinstance(result, dict) or isinstance(pattern, dict):
+            return mapping
         mapping[pattern] = result
         seen_inputs.add(pattern)
         seen_outputs.add(result)
@@ -357,18 +365,19 @@ Proof.
   {intros}
 Qed."""
     
-    def write_cycle_theorem(self, function_name, cycles):
+    def write_cycle_theorem(self, function_name, cycles, possible_values):
       theorems = []
       for start, length in cycles:
           theorems.append(f"""
-Theorem {function_name}_cycle :
-  forall x, {function_name} x = {function_name} (x + {length}).
-Proof.
-  intros x.
-  induction x; simpl; auto.
-  rewrite IHx.
-  reflexivity.
-Qed.""")
+                          
+Fixpoint step (n : nat) (x : string) : string :=
+  match n with
+  | 0 => x
+  | S n' => step n' (if_struct x)
+  end.
+                          
+Theorem {function_name}_cycle_step_{length} :
+  forall x, In x {json.dumps(possible_values)} -> step {length} x = x.""")
       return "\n".join(theorems)
     
     def write_idempotency_theorem(self, function_name):

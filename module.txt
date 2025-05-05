@@ -1,33 +1,15 @@
 Require Import String.
 Require Import Arith.Compare_dec.
-Require Import ZArith.
+Require Import ZArith.Require Import List.
+Import ListNotations.
 
 Definition if_struct (x : string) : string :=
 	if string_dec x "green"%string then
 		"yellow"%string
 	else if string_dec x "yellow"%string then
-		"red"%string
+		"yellow"%string
 	else
 		"green"%string.
-
-Fixpoint for_loop_list {A B : Type}
-	(op : A -> B -> B)
-	(init : B)
-	(lst : list A)
-: B :=
-	match lst with
-	| [] => init
-	| x :: xs => for_loop_list op (op x init) xs
-	end.
-
-Definition for_loop_list_operation (nums : list nat) : nat :=
-	for_loop_list (fun x acc => acc + x) 0 nums
-
-Fixpoint while_loop_str (z : string) (count : nat) : string :=
-	if count <? 10 then
-		while_loop_str (z ++ "a"%string)
-	else
-		z.
 
 
 
@@ -37,54 +19,16 @@ Proof.
   intros x.
   destruct x; simpl; eexists; reflexivity.
 Qed.
-Theorem if_struct_cycle :
-  forall x, if_struct x = if_struct (x + 3).
+Theorem if_struct_idempotent :
+  forall x, if_struct (if_struct x) = if_struct x.
 Proof.
   intros x.
   induction x; simpl; auto.
   rewrite IHx.
   reflexivity.
-Qed.[]
-Lemma append_a_increases_length :
-  forall s, String.length (s ++ "a"%char) = S (String.length s).
-Proof.
-  intros s. rewrite String.append_length. simpl. lia.
 Qed.
-
-Lemma while_loop_str_length_invariant :
-  forall z count max_count,
-    count <= max_count ->
-    String.length (while_loop_str z count max_count) = String.length z + (max_count - count).
+Theorem if_struct_fixed_point_yellow :
+if_struct yellow = yellow.
 Proof.
-  intros z count max_count Hle.
-  revert z.
-  induction count using lt_wf_ind.
-  intros z.
-  destruct (count <? max_count) eqn:Hlt.
-  - apply Nat.ltb_lt in Hlt.
-    rewrite <- Nat.add_1_r.
-    simpl.
-    rewrite <- append_a_increases_length.
-    specialize (H (count + 1)).
-    assert (count + 1 <= max_count) by lia.
-    specialize (H H0 (z ++ "a"%char)).
-    rewrite String.append_length.
-    simpl in H.
-    lia.
-  - apply Nat.ltb_ge in Hlt.
-    simpl. lia.
-Qed.
-
-Theorem while_loop_str_final_length :
-  forall max_count,
-    String.length (while_loop_str EmptyString 0 max_count) = max_count.
-Proof.
-  intros. apply while_loop_str_length_invariant. lia.
-Qed.
-Theorem while_loop_terminates :
-  forall z,
-    exists result, while_loop z 0 = result.
-Proof.
-  exists (while_loop z 0).
-  reflexivity.
+  simpl. reflexivity.
 Qed.

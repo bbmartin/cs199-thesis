@@ -289,7 +289,7 @@ class PythonToCOQ(Transformer):
                     blocks.append("")
         
         # Include any imports
-        blocks.insert(0, "Require Import String.\nRequire Import Arith.Compare_dec.\nRequire Import ZArith.\n\n")
+        blocks.insert(0, "Require Import String.\nRequire Import Arith.Compare_dec.\nRequire Import ZArith.Require Import List.\nImport ListNotations.\n\n")
 
         theorems = TheoremGenerator().generate(args)
         return theorems, blocks
