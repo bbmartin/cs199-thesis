@@ -1,5 +1,6 @@
 import math
 import os.path
+import re
 
 from lark import Lark
 from lark.indenter import PythonIndenter
