@@ -1,0 +1,34 @@
+Require Import String.
+Require Import Arith.Compare_dec.
+Require Import ZArith.Require Import List.
+Import ListNotations.
+
+Definition if_struct (x : string) : string :=
+	if string_dec x "green"%string then
+		"yellow"%string
+	else if string_dec x "yellow"%string then
+		"yellow"%string
+	else
+		"green"%string.
+
+
+
+Theorem if_struct_exhaustive :
+  forall x, exists y, if_struct x = y.
+Proof.
+  intros x.
+  destruct x; simpl; eexists; reflexivity.
+Qed.
+Theorem if_struct_idempotent :
+  forall x, if_struct (if_struct x) = if_struct x.
+Proof.
+  intros x.
+  induction x; simpl; auto.
+  rewrite IHx.
+  reflexivity.
+Qed.
+Theorem if_struct_fixed_point_yellow :
+if_struct yellow = yellow.
+Proof.
+  simpl. reflexivity.
+Qed.

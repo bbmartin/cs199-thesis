@@ -1,0 +1,6 @@
+match x with
+| green => yellow
+| yellow => red
+| _ => green
+end.
+No recognizable theorem pattern found.
