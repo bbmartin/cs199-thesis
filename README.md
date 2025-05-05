@@ -14,8 +14,8 @@ Make sure first that the libraries listed in `requirements.txt` have been instal
 pip install -r requirements.txt
 ```
 
-The `test.py` file contains the Python code to be converted to COQ. In order to translate said file, run the following:
+The first argument of the command shown below should be the filepath that leads to the Python code to be translated. The second argument is where the output file containing the translated Coq file is located (and will be created if it doesn't exist).
 
 ```
-py parse.py
+python -m src.main input_file.py output_file.txt
 ```
