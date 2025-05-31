@@ -1,4 +1,5 @@
 import sys
+import uuid
 
 from lark.visitors import Transformer
 
@@ -38,6 +39,8 @@ class PythonToCOQ(Transformer):
                 self.curr_flag_index = 0
             else:
                 self.curr_flag_index += 1
+            
+            self.variables = []
         elif "v" in marker:
             flag_type = "v"
         elif "p" in marker:
@@ -55,6 +58,7 @@ class PythonToCOQ(Transformer):
                 self.flags.append(None)
                 curr += 1
             self.flags[index] = {
+                "ID": self.curr_flag_index,
                 "type": "flag",
                 "scenario": None,
                 "variables": None,
@@ -71,7 +75,6 @@ class PythonToCOQ(Transformer):
             case _:
                 sys.exit("PythonToCOQ Error: Invalid flag type")
         
-        # print("Flags: ", self.flags)
         return self.flags[index]
 
     def number(self, args):
@@ -132,6 +135,11 @@ class PythonToCOQ(Transformer):
         }
     
     def assign(self, args):
+        return args
+    
+    def factor(self, args):
+        if '-' in args and len(args) == 2:
+            return int(args[0].value + str(args[1]))
         return args
     
     def arith_expr(self, args):
@@ -197,6 +205,8 @@ class PythonToCOQ(Transformer):
         )
         if (existing_var is None):
             self.variables.append(variable)
+        else:
+            self.variables[self.variables.index(existing_var)] = variable
 
         # Replace variable declarations in current flag
         var_dec = next(
@@ -289,7 +299,7 @@ class PythonToCOQ(Transformer):
                     blocks.append("")
         
         # Include any imports
-        blocks.insert(0, "Require Import String.\nRequire Import Arith.Compare_dec.\nRequire Import ZArith.Require Import List.\nImport ListNotations.\n\n")
+        blocks.insert(0, "Require Import Arith.\nRequire Import Arith.Compare_dec.\nRequire Import List.\nRequire Import List String.\nRequire Import Recdef.\nRequire Import String.\nRequire Import ZArith.\nImport ListNotations.\n\n(* Translations *)\n")
 
         theorems = TheoremGenerator().generate(args)
         return theorems, blocks

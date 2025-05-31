@@ -1,8 +1,14 @@
-Require Import String.
+Require Import Arith.
 Require Import Arith.Compare_dec.
+Require Import List.
+Require Import List String.
+Require Import Recdef.
+Require Import String.
 Require Import ZArith.
+Import ListNotations.
 
-Definition if_struct (x : string) : string :=
+(* Translations *)
+Definition if_struct_0 (x : string) : string :=
 	if string_dec x "green"%string then
 		"yellow"%string
 	else if string_dec x "yellow"%string then
@@ -10,21 +16,125 @@ Definition if_struct (x : string) : string :=
 	else
 		"green"%string.
 
-Fixpoint for_loop_list {A B : Type}
+Definition if_struct_1 (x : Z) : Z :=
+	if Z.gtb x (1) then
+		x + 1
+	else if Z.ltb x (-1) then
+		x - 1
+	else
+		0.
+
+Definition for_loop_2 {A : Type}
+	(start end_ : nat)
+	(body : nat -> A -> A)
+	(init : A) : A :=
+	let fix helper remaining current init :=
+		match remaining with
+		| O => init
+		| S rem =>
+			if current <? end_ then
+				helper rem (current + 1) (body current init)
+			else
+				init
+		end
+	in helper (end_ - start) start init.
+
+Definition for_loop_operation_2 (n : nat) : nat :=
+	for_loop_2 0 10 (fun i y => y + i) n.
+
+Fixpoint for_loop_list_3 {A B : Type}
 	(op : A -> B -> B)
 	(init : B)
 	(lst : list A)
 : B :=
 	match lst with
 	| [] => init
-	| x :: xs => for_loop_list op (op x init) xs
+	| x :: xs => for_loop_list_3 op (op x init) xs
 	end.
 
-Definition for_loop_list_operation (nums : list nat) : nat :=
-	for_loop_list (fun x acc => acc + x) 0 nums
+Definition for_loop_list_operation_3 (nums : list nat) : nat :=
+	for_loop_list_3 (fun x acc => acc + x) 0 nums.
 
-Fixpoint while_loop_str (z : string) (count : nat) : string :=
-	if count <? 10 then
-		while_loop_str (z ++ "a"%string)
-	else
-		z.
+Definition for_loop_4 {A : Type}
+	(start end_ : nat)
+	(body : nat -> A -> A)
+	(init : A) : A :=
+	let fix helper remaining current init :=
+		match remaining with
+		| O => init
+		| S rem =>
+			if current <? end_ then
+				helper rem (current + 1) (body current init)
+			else
+				init
+		end
+	in helper (end_ - start) start init.
+
+Definition list_strings : list string := ["a"%string; "b"%string; "c"%string; "d"%string; "e"%string].
+Definition for_loop_operation_4 : string :=
+	@for_loop_4 string 0 (List.length list_strings)
+		(fun (i : nat) (acc : string) =>
+			String.append acc (nth i list_strings ""%string))
+		""%string.
+
+Fixpoint while_loop_5 (z : nat) (fuel : nat) {struct fuel} : nat :=
+	match fuel with
+	| O => z
+	| S fuel' =>
+		if z <? 10 then
+			while_loop_5 (z + 1) fuel'
+		else z
+	end.
+
+Fixpoint while_loop_str_6 (z : string) (count : nat) (fuel : nat) {struct fuel} : string :=
+	match fuel with
+	| O => z
+	| S fuel' =>
+		if count <? 10 then
+			while_loop_str_6 (z ++ "a"%string) (count + 1) fuel'
+		else
+			z
+	end.
+
+
+(* Theorems *)
+Theorem if_struct_exhaustive :
+  forall x, exists y, if_struct x = y.
+Proof.
+  intros x.
+  destruct x; simpl; eexists; reflexivity.
+Qed.
+                          
+Fixpoint step (n : nat) (x : string) : string :=
+  match n with
+  | 0 => x
+  | S n' => step n' (if_struct x)
+  end.
+                          
+Theorem if_struct_cycle_step_3 :
+  forall x, In x ["red", "green", "yellow"] -> step 3 x = x.
+Theorem sum_first_n :
+  forall (n : nat),
+    loop n 0 = n * (n + 1) / 2.
+Proof.
+  intros n.
+  induction n.
+  - simpl. reflexivity.
+  - simpl. rewrite IHn. 
+    unfold loop at 1.
+  ring.
+Qed.
+Theorem while_loop_terminates :
+  forall z,
+    exists result, while_loop z 0 = result.
+Proof.
+  exists (while_loop z 0).
+  reflexivity.
+Qed.
+Theorem while_loop_terminates :
+  forall z,
+    exists result, while_loop z 0 = result.
+Proof.
+  exists (while_loop z 0).
+  reflexivity.
+Qed.

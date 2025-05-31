@@ -15,7 +15,7 @@ def translate_file(input_filepath, output_filepath):
     with open(output_filepath, "w") as output_file:
         for block in translations:
             output_file.write(block)
-        output_file.write("\n")
+        output_file.write("\n(* Theorems *)")
         for theorem in theorems:
             output_file.write(str(theorem))
 

@@ -26,7 +26,7 @@ class IfToCOQ():
             }
             
             # Definition
-            translation += f"Definition if_struct ({self.condition["lhe"]} : Z) : Z :=\n"
+            translation += f"Definition if_struct_{self.flags["ID"]} ({self.condition["lhe"]} : Z) : Z :=\n"
             
             # If
             if self.condition["operator"] != "!=":
@@ -46,7 +46,7 @@ class IfToCOQ():
         # str
         elif scenario == "str":
             # Definition
-            translation += f"Definition if_struct ({self.condition["lhe"]} : string) : string :=\n"
+            translation += f"Definition if_struct_{self.flags["ID"]} ({self.condition["lhe"]} : string) : string :=\n"
             
             # If
             if self.condition["operator"] == "==":
