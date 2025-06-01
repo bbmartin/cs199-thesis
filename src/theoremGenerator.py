@@ -5,10 +5,13 @@ class TheoremGenerator:
     
     def __init__(self):
         self.theorem = []
+        self.id = 0
 
     def generate(self, parsed_ast):
         possible_values = []
         for node in parsed_ast:
+            if node.get("ID") is not None:
+                self.id = node["ID"]
             if node["type"] == "flag" and node["possible_values"] is not None:            
                 possible_values = list(node["possible_values"])
                 continue
@@ -35,51 +38,19 @@ class TheoremGenerator:
 
     def write_string_append_theorem(self, func_name="while_loop_str"):
         theorem = f"""
-Lemma append_a_increases_length :
-  forall s, String.length (s ++ "a"%char) = S (String.length s).
-Proof.
-  intros s. rewrite String.append_length. simpl. lia.
-Qed.
-
-Lemma {func_name}_length_invariant :
-  forall z count max_count,
-    count <= max_count ->
-    String.length ({func_name} z count max_count) = String.length z + (max_count - count).
-Proof.
-  intros z count max_count Hle.
-  revert z.
-  induction count using lt_wf_ind.
-  intros z.
-  destruct (count <? max_count) eqn:Hlt.
-  - apply Nat.ltb_lt in Hlt.
-    rewrite <- Nat.add_1_r.
-    simpl.
-    rewrite <- append_a_increases_length.
-    specialize (H (count + 1)).
-    assert (count + 1 <= max_count) by lia.
-    specialize (H H0 (z ++ "a"%char)).
-    rewrite String.append_length.
-    simpl in H.
-    lia.
-  - apply Nat.ltb_ge in Hlt.
-    simpl. lia.
-Qed.
-
-Theorem {func_name}_final_length :
+Theorem {func_name}_{self.id}_final_length :
   forall max_count,
-    String.length ({func_name} EmptyString 0 max_count) = max_count.
-Proof.
-  intros. apply {func_name}_length_invariant. lia.
+    String.length ({func_name}_{self.id} EmptyString 0 max_count) = max_count.
 Qed."""
         return theorem
     
     def write_while_loop_termination_theorem(self, func_name="while_loop", variable="z"):
       return f"""
-Theorem {func_name}_terminates :
+Theorem {func_name}_{self.id}_terminates :
   forall {variable},
-    exists result, {func_name} {variable} 0 = result.
+    exists result, {func_name}_{self.id} {variable} 0 = result.
 Proof.
-  exists ({func_name} {variable} 0).
+  exists ({func_name}_{self.id} {variable} 0).
   reflexivity.
 Qed."""
 
@@ -156,27 +127,13 @@ Qed."""
                         and rhs["rhe"] == loop_var
                     ):
                         theorems.append(self.write_arithmetic_product_theorem())
-        # else:
-        #     block = node["block"]
-        #     if len(block) == 1:
-        #         assign = block[0]
-        #         if (
-        #             assign.get("type") == "assignment"
-        #             and isinstance(assign["value"], dict)
-        #             and assign["value"].get("type") == "arith_expr"
-        #         ):
-        #             op = assign["value"].get("operator")
-        #             if op == "+":
-        #                 theorems.append(self.write_for_loop_sum_theorem())
-        #             elif op == "*":
-        #                 theorems.append(self.write_arithmetic_product_theorem())
         return theorems
 
     def write_for_loop_sum_theorem(self, func_name="for_struct"):
         theorem = f"""
-Theorem {func_name}_correct :
+Theorem {func_name}_{self.id}_correct :
 forall l,
-{func_name} l = fold_left Nat.add l 0.
+{func_name}_{self.id} l = fold_left Nat.add l 0.
 Proof.
   intros l. induction l as [|h t IH].
   - reflexivity.
@@ -184,10 +141,10 @@ Proof.
 Qed."""
         return theorem
 
-    def write_arithmetic_summation_theorem(self):
+    def write_arithmetic_summation_theorem(self, func_name="for_struct"):
 
-        theorem = """
-Theorem sum_first_n :
+        theorem = f"""
+Theorem {func_name}_{self.id}_sum_first_n :
   forall (n : nat),
     loop n 0 = n * (n + 1) / 2.
 Proof.
@@ -200,15 +157,15 @@ Proof.
 Qed."""
         return theorem
 
-    def write_arithmetic_product_theorem(self):
-        theorem = """
+    def write_arithmetic_product_theorem(self, func_name="for_struct"):
+        theorem = f"""
 Fixpoint fact (n : nat) : nat :=
   match n with
   | 0 => 1
   | S n' => n * fact n'
   end.
 
-Theorem product_first_n :
+Theorem {func_name}_{self.id}_product_first_n :
   forall n,
     loop n 1 = fact n.
 Proof.
@@ -332,8 +289,8 @@ Qed."""
           domain_cases = " (* x ∈ {" + ", ".join(sorted(input_domain)) + "} *)"
 
       return f"""
-Theorem {function_name}_exhaustive :
-  forall x, exists y, {function_name} x = y.{domain_cases}
+Theorem {function_name}_{self.id}_exhaustive :
+  forall x, exists y, {function_name}_{self.id} x = y.{domain_cases}
 Proof.
   intros x.
   destruct x; simpl; eexists; reflexivity.
@@ -357,7 +314,7 @@ Qed."""
             intros = f"intros {open_brackets}[H _]{close_brackets}; congruence." 
 
         return f"""
-Theorem {function_name}_mutually_exclusive :
+Theorem {function_name}_{self.id}_mutually_exclusive :
   forall x, {disjunction}.
 Proof.
   intros x.
@@ -376,14 +333,14 @@ Fixpoint step (n : nat) (x : string) : string :=
   | S n' => step n' (if_struct x)
   end.
                           
-Theorem {function_name}_cycle_step_{length} :
+Theorem {function_name}_{self.id}_cycle_step_{length} :
   forall x, In x {json.dumps(possible_values)} -> step {length} x = x.""")
       return "\n".join(theorems)
     
     def write_idempotency_theorem(self, function_name):
         return f"""
-Theorem {function_name}_idempotent :
-  forall x, {function_name} ({function_name} x) = {function_name} x.
+Theorem {function_name}_{self.id}_idempotent :
+  forall x, {function_name}_{self.id} ({function_name}_{self.id} x) = {function_name} x.
 Proof.
   intros x.
   induction x; simpl; auto.
@@ -395,8 +352,8 @@ Qed."""
         theorems = ""
         for val in fixed_points:
           theorems += f"""
-Theorem {function_name}_fixed_point_{val} :
-{function_name} {val} = {val}.
+Theorem {function_name}_{self.id}_fixed_point_{val} :
+{function_name}_{self.id} {val} = {val}.
 Proof.
   simpl. reflexivity.
 Qed."""

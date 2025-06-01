@@ -22,17 +22,20 @@ python -m src.main input_file.py output_file.txt
 
 ## How to Define Code Blocks
 
-The translator sees code blocks as isolated snippets of code that performs a single task and has no connection to any other code blocks within the same input file. Each well-defined code block is then translated into Coq. These are usually prefaced with **flags**, Python comments that start with a very specific set of characters so that the parser treats them differently from ordinary comments. 
+The translator sees code blocks as isolated snippets of code that performs a single task and has no connection to any other code blocks within the same input file. Each well-defined code block is then translated into Coq. These are usually prefaced with **flags**, Python comments that start with a very specific set of characters so that the parser treats them differently from ordinary comments.
 
 The following flags are used in both separating code blocks from one another, as well as providing context for the translation:
 
 ### `#s:` flag
 
 This is a required flag used in signifiying the start of a code block, as well as providing the primary data type being manipulated within the code block. The form is as follows:
+
 ```python
 #s: <data_type>
 ```
+
 Example:
+
 ```python
 #s: int
 # This will be seen as a regular Python comment.
@@ -44,10 +47,13 @@ for i in range(10):
 ### `#v:` flag
 
 This flag is not required but highly recommended to use as this highlights any variables used in the code block and will be stored for later use when translating the Python code into Coq. It takes the following form:
+
 ```python
 #v: [...list_of_variable_names]
 ```
+
 Example:
+
 ```python
 #s: int
 #v: [x, lst]
@@ -64,9 +70,11 @@ for i in lst:
 The following test cases are Python code blocks that the translator currently supports (which can be seen in `input.py` for reference):
 
 ### `if-else` statement
+
 1. Comparing and assigning strings
 
     Sample Python Code:
+
     ```python
     #s: str
     #v: [x]
@@ -80,6 +88,7 @@ The following test cases are Python code blocks that the translator currently su
     ```
 
     Coq Direct Translation:
+
     ```coq
     Definition if_struct_0 (x : string) : string :=
         if string_dec x "green"%string then
@@ -91,8 +100,9 @@ The following test cases are Python code blocks that the translator currently su
     ```
 
 2. Basic arithmetic based on numerical comparisons
-    
+
     Sample Python Code:
+
     ```python
     #s: int
     #v: [x]
@@ -106,6 +116,7 @@ The following test cases are Python code blocks that the translator currently su
     ```
 
     Coq Direct Translation:
+
     ```coq
     Definition if_struct_1 (x : Z) : Z :=
         if Z.gtb x (1) then
@@ -116,10 +127,12 @@ The following test cases are Python code blocks that the translator currently su
             0.
     ```
 
-### `for` loop 
+### `for` loop
+
 1. Adding numbers in a range
-   
+
     Sample Python Code:
+
     ```python
     #s: int
     #v: [y]
@@ -129,6 +142,7 @@ The following test cases are Python code blocks that the translator currently su
     ```
 
     Coq Direct Translation:
+
     ```coq
     Definition for_loop_2 {A : Type}
         (start end_ : nat)
@@ -152,6 +166,7 @@ The following test cases are Python code blocks that the translator currently su
 2. Adding numbers in a list
 
     Sample Python Code:
+
     ```python
     #s: int
     #v: [y, items]
@@ -162,6 +177,7 @@ The following test cases are Python code blocks that the translator currently su
     ```
 
     Coq Direct Translation:
+
     ```coq
     Fixpoint for_loop_list_3 {A B : Type}
         (op : A -> B -> B)
@@ -180,6 +196,7 @@ The following test cases are Python code blocks that the translator currently su
 3. Concatenating strings in a list
 
     Sample Python Code:
+
     ```python
     #s: str
     #v: [y, items]
@@ -190,6 +207,7 @@ The following test cases are Python code blocks that the translator currently su
     ```
 
     Coq Direct Translation:
+
     ```coq
     Definition for_loop_4 {A : Type}
         (start end_ : nat)
@@ -215,9 +233,11 @@ The following test cases are Python code blocks that the translator currently su
     ```
 
 ### `while` loop
+
 1. Repeated arithmetic operations
 
     Sample Python Code:
+
     ```python
     #s: int
     #v: [z]
@@ -227,6 +247,7 @@ The following test cases are Python code blocks that the translator currently su
     ```
 
     Coq Direct Translation:
+
     ```coq
     Fixpoint while_loop_5 (z : nat) (fuel : nat) {struct fuel} : nat :=
         match fuel with
@@ -239,8 +260,9 @@ The following test cases are Python code blocks that the translator currently su
     ```
 
 2. Repeated string concatenation
-   
+
    Sample Python Code:
+
    ```python
     #s: str
     #v: [z, count]
@@ -252,6 +274,7 @@ The following test cases are Python code blocks that the translator currently su
     ```
 
     Coq Direct Translation:
+
     ```coq
     Fixpoint while_loop_str_6 (z : string) (count : nat) (fuel : nat) {struct fuel} : string :=
         match fuel with
@@ -266,3 +289,49 @@ The following test cases are Python code blocks that the translator currently su
 
 ## Theorems
 
+As an additional feature still in development, the translator is also able to *suggest* possible theories based on inferred context of the code using its structure and the given flags in the comments.
+
+For example, based on the code snippet below,
+
+   ```python
+    #s: str
+    #v: [x]
+    x = "yellow"
+    if x == "green":
+        x = "yellow"
+    elif x == "yellow":
+        x = "red"
+    else:
+        x = "green"
+  ```
+
+The theorem generation module of the translator (`theoremGenerator.py`) is able to see that after three iterations of the same code, the value of `x` will be back to its original value. Thus, identifying a cycle as defined below:
+
+   ```coq
+    Fixpoint step (n : nat) (x : string) : string :=
+      match n with
+      | 0 => x
+      | S n' => step n' (if_struct x)
+      end.
+                          
+    Theorem if_struct_cycle_step_3 :
+    forall x, In x [] -> step 3 x = x.
+   ```
+
+From the supported code structures listed above, the following theorems can be detected by the theorem generation module:
+
+1. `if-else` statement
+    * cycles
+    * mutual exlusivity
+    * fixed point
+    * exhaustiveness
+    * idempotency
+2. `for` loop
+    * arithmetic summation
+    * arithmetic product
+    * sum when adding in a loop
+3. `while` loop
+    * Final length when appending to strings in a loop
+    * While loop terminates
+
+> ***NOTE:***  This feature is an additional experimental feature of the translation, use with caution.

@@ -1,5 +1,4 @@
 import sys
-import uuid
 
 from lark.visitors import Transformer
 
