@@ -2,7 +2,6 @@
 
 #s: str
 #v: [x]
-#p: {"green", "yellow", "red"}
 x = "yellow"
 if x == "green":
     x = "yellow"

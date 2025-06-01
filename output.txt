@@ -112,7 +112,7 @@ Fixpoint step (n : nat) (x : string) : string :=
   end.
                           
 Theorem if_struct_cycle_step_3 :
-  forall x, In x ["red", "green", "yellow"] -> step 3 x = x.
+  forall x, In x [] -> step 3 x = x.
 Theorem sum_first_n :
   forall (n : nat),
     loop n 0 = n * (n + 1) / 2.
